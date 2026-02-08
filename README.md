@@ -1,6 +1,6 @@
 # AI-Powered Personal Finance Tracker
 
-## Status: Started (Feb 8, 2026)
+## Status: Started (Feb 7, 2026)
 
 ## Tech Stack
 - FastAPI (Backend)
