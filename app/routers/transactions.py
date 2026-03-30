@@ -32,7 +32,7 @@ def create_transaction(transaction: schema.transactionbse, db: Session = Depends
     needs_review = False
     is_ai = False
     if final_category_id is None:
-        print(f"🤖 AI Analyzing: {transaction.description}")
+        print(f"[AI] Analyzing: {transaction.description}")
         ai_result = ai_agent.predict_category(transaction.description)
         if ai_result['id'] != 0:
             final_category_id = ai_result['id']

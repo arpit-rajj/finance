@@ -1,14 +1,15 @@
 import pytest
+import uuid
 from unittest.mock import patch
 
 @pytest.fixture
 def auth_token(client):
     # Setup test user for transactions
-    email = "trx_user@example.com"
+    email = f"trx_user_{uuid.uuid4().hex[:8]}@example.com"
     password = "trxpassword"
     
     # Try creating the user, ignore if already exists (depends on db truncation tactic)
-    response = client.post("/users/", json={"email": email, "password": password})
+    client.post("/users/", json={"name": "Transaction User", "email": email, "password": password})
     
     login_res = client.post("/auth/login", data={"username": email, "password": password})
     return login_res.json()["access_token"]
@@ -18,11 +19,13 @@ def auth_headers(auth_token):
     return {"Authorization": f"Bearer {auth_token}"}
 
 
-@patch("app.routers.transactions.ai_agent.predict_category")
-def test_create_transaction(mock_predict, client, auth_headers):
-    # Mock the AI agent predicting category
-    mock_predict.return_value = {"id": 1, "confidence": 0.8}
-    
+@pytest.fixture(autouse=True)
+def mock_predict_category():
+    with patch("app.routers.transactions.ai_agent.predict_category") as mock:
+        mock.return_value = {"id": 0, "confidence": 0.0}
+        yield mock
+
+def test_create_transaction(client, auth_headers):
     response = client.post(
         "/transactions/",
         json={

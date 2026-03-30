@@ -20,7 +20,7 @@ url_object = URL.create(
     port=int(os.getenv("DATABASE_PORT", 5432)),
     database=TEST_DB_NAME,
 )
-TEST_DATABASE_URL = str(url_object)
+TEST_DATABASE_URL = url_object.render_as_string(hide_password=False)
 
 engine = create_engine(url_object)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -36,6 +36,7 @@ def setup_test_db():
     
     yield
     
+    engine.dispose()
     drop_database(TEST_DATABASE_URL)
 
 @pytest.fixture(scope="function")

@@ -1,7 +1,7 @@
 def test_create_user(client):
     response = client.post(
         "/users/",
-        json={"email": "testuser@example.com", "password": "securepassword"}
+        json={"name": "Test User", "email": "testuser@example.com", "password": "securepassword"}
     )
     assert response.status_code == 201
     data = response.json()
@@ -12,7 +12,7 @@ def test_login_user(client):
     # Setup - first create the user
     client.post(
         "/users/",
-        json={"email": "testuser2@example.com", "password": "securepassword"}
+        json={"name": "Test User 2", "email": "testuser2@example.com", "password": "securepassword"}
     )
     
     # Act - login
