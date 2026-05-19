@@ -8,7 +8,7 @@ class Userresponse(BaseModel):
     email: EmailStr
     created_at: datetime.datetime
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Userbase(BaseModel):
     name: str
@@ -37,7 +37,7 @@ class transactionresponse(transactionbse):
     owner_id: int
     is_ai_categorized: bool
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class expenditure(transactionbse):
     pass
@@ -48,11 +48,11 @@ class transactionstats(BaseModel):
     net_balance: float
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class monthyearlystats(transactionstats):
     month: Optional[int] = None
     year: Optional[int] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True

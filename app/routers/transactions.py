@@ -6,6 +6,15 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from app.oauth2 import get_current_user
 from sqlalchemy import func, case
+# pyrefly: ignore [missing-import]
+import redis
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+
 router = APIRouter(
     prefix="/transactions",
     tags=['Transactions']
@@ -54,6 +63,10 @@ def create_transaction(transaction: schema.transactionbse, db: Session = Depends
     db.add(new_transaction)
     db.commit()
     db.refresh(new_transaction)
+    try:
+        redis_client.delete(f"summary:{current_user.id}")
+    except redis.exceptions.RedisError as e:
+        logger.warning(f"Redis cache invalidation failed: {e}")
     return new_transaction
 
 @router.get("/stats", status_code=status.HTTP_200_OK, response_model=schema.transactionstats)
@@ -113,6 +126,10 @@ def delete_transaction(id: int, db: Session = Depends(get_db),
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
     transaction_query.delete(synchronize_session=False)
     db.commit()
+    try:
+        redis_client.delete(f"summary:{current_user.id}")
+    except redis.exceptions.RedisError as e:
+        logger.warning(f"Redis cache invalidation failed: {e}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.put("/{id}", status_code=status.HTTP_200_OK, response_model=schema.transactionresponse)
@@ -126,6 +143,44 @@ def update_transaction(id: int, updated_transaction: schema.transactionbse, db: 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
     transaction_query.update(updated_transaction.dict(), synchronize_session=False)
     db.commit()
+    try:
+        redis_client.delete(f"summary:{current_user.id}")
+    except redis.exceptions.RedisError as e:
+        logger.warning(f"Redis cache invalidation failed: {e}")
     return transaction_query.first()
 
-
+@router.get("/summary", status_code=status.HTTP_200_OK, response_model=schema.transactionstats)
+def get_summary(db: Session = Depends(get_db), current_user: schema.Userresponse = Depends(get_current_user)):
+    cache_key = f"summary:{current_user.id}"
+    
+    # Cache-Aside logic: Attempt to get from Redis, fallback to DB if Redis is down
+    try:
+        cached_summary = redis_client.get(cache_key)
+        if cached_summary:
+            return json.loads(cached_summary)
+    except redis.exceptions.RedisError as e:
+        logger.warning(f"Redis operation failed: {e}. Falling back to PostgreSQL.")
+        
+    stats = db.query(models.Transaction).filter(models.Transaction.owner_id == current_user.id).with_entities(
+        func.sum(case((models.Transaction.amount > 0, models.Transaction.amount), else_=0)).label("income"),
+        func.sum(case((models.Transaction.amount < 0, models.Transaction.amount), else_=0)).label("expense"),
+        func.sum(models.Transaction.amount).label("net")
+    ).first()
+    
+    total_income = stats.income or 0
+    total_expenditure = stats.expense or 0
+    net_balance = stats.net or 0
+    
+    result = {
+        "total_income": total_income,
+        "total_expenditure": abs(total_expenditure),
+        "net_balance": net_balance
+    }
+    
+    try:
+        # Cache the result for 5 minutes
+        redis_client.setex(cache_key, 300, json.dumps(result))
+    except redis.exceptions.RedisError as e:
+        logger.warning(f"Redis set cache failed: {e}")
+    
+    return result

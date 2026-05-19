@@ -25,7 +25,12 @@ def mock_predict_category():
         mock.return_value = {"id": 0, "confidence": 0.0}
         yield mock
 
-def test_create_transaction(client, auth_headers):
+@pytest.fixture(autouse=True)
+def mock_redis():
+    with patch("app.routers.transactions.redis_client") as mock:
+        yield mock
+
+def test_create_transaction(client, auth_headers, mock_redis):
     response = client.post(
         "/transactions/",
         json={
@@ -41,6 +46,9 @@ def test_create_transaction(client, auth_headers):
     assert data["amount"] == 100.5
     assert data["description"] == "Bought Groceries"
     assert data["id"] is not None
+    
+    # Verify cache invalidation was triggered
+    assert mock_redis.delete.called
 
 def test_get_transactions(client, auth_headers):
     # Ensure there's a transaction
